@@ -1,0 +1,109 @@
+---
+title: "data-project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+cs_training <- read_csv("~/cs-training.csv")
+cs_training <- cs_training[,-1]
+cs_training <- as.matrix(cs_training)
+```
+
+```{r}
+library('bnstruct')
+data_imputed <- knn.impute(cs_training,k=10,cat.var = c(1,4,7:11), to.impute = 1:nrow(cs_training), using = 1:nrow(cs_training))
+
+```
+
+```{r}
+# standardizes each variable
+data_imputed_standard <- matrix(nrow = 150000, ncol = 10)
+for(i in 2:ncol(data_imputed)){ 
+  data_imputed_standard[,i-1] <- (data_imputed[,i]-median(data_imputed[,i]))/sd(data_imputed[,i])}
+data_imputed_standard <- cbind(data_imputed[,1],data_imputed_standard)
+
+```
+
+```{r}
+library(glmnet)
+
+### splits off response variable
+y <- as.factor(data_imputed[,1])
+x <- data_imputed[,2:11]
+
+### performs k-fold cross validation with 10 folds while looping over autogenereated lambda values, returns the best lambda and average auc score associated with that lambda, 
+log.regress <- cv.glmnet(x = x, y = y, family = "binomial", nfold = 10, type.measure="auc")
+auc <- log.regress$cvm[log.regress$lambda == log.regress$lambda.min]
+lambda <- log.regress$lambda.min
+
+```
+
+```{r}
+library(pROC)
+library(class)
+### generates 10 random folds
+index <- 1:150000
+x1 <- sample(index,15000, replace = FALSE)
+index <- setdiff(index,x1)
+x2 <- sample(index, 15000, replace = FALSE)
+index <- setdiff(index,x2)
+x3 <- sample(index, 15000, replace = FALSE)
+index <- setdiff(index,x3)
+x4 <- sample(index, 15000, replace = FALSE)
+index <- setdiff(index,x4)
+x5 <- sample(index, 15000, replace = FALSE)
+index <- setdiff(index,x5)
+x6 <- sample(index, 15000, replace = FALSE)
+index <- setdiff(index,x6)
+x7 <- sample(index, 15000, replace = FALSE)
+index <- setdiff(index,x7)
+x8 <- sample(index, 15000, replace = FALSE)
+index <- setdiff(index,x8)
+x9 <- sample(index, 15000, replace = FALSE)
+x10 <- setdiff(index,x9)
+
+
+# puts in a matrix
+folds <- matrix(nrow = 10, ncol = 15000)
+folds[1,] <- x1
+folds[2,] <- x2
+folds[3,] <- x3
+folds[4,] <- x4
+folds[5,] <- x5
+folds[6,] <- x6
+folds[7,] <- x7
+folds[8,] <- x8
+folds[9,] <- x9
+folds[10,] <- x10
+
+
+# runs a knn algorithm on each of the 10 k-folds, looped over the number of neighbors, returns AUC values 
+aucx <- c()
+for(i in 1:3){
+  aucs <- c()
+  a <- i
+  for(j in 1:10){
+    # cv set
+    cv.set <- data_imputed_standard[folds[i,],]
+    y.cv <- as.factor(cv.set[,1])
+    x.cv <- cv.set[,-1]
+    
+    # training set
+    train <- data_imputed_standard[-(folds[i,]),]
+    y.train <- as.factor(train[,1])
+    x.train <- train[,-1]
+  
+    knni <- knn(x.train, x.cv, y.train, k = a, l = 0, prob = FALSE, use.all = TRUE) ### knn predictions
+    
+    # auc value for each fold
+    auci <- auc(y.cv,as.numeric(knni)) 
+    aucs <- c(aucs,auci)
+    }
+  aucx <- c(aucx,mean(aucs))} # averages results for each value of knn
+  
+```
