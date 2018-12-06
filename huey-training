@@ -1,0 +1,38 @@
+# load in packages
+library(caret)
+library(ranger)
+library(dplyr)
+library(e1071)
+library(ggplot2)
+library(mlbench)
+library(plotROC)
+library(pROC)
+
+trial1 <- sample_n(as.data.frame(data_imputed),10000)
+
+trial1$SeriousDlqin2yrs <- factor(testing$SeriousDlqin2yrs)
+levels(trial1$SeriousDlqin2yrs) <- c("NonDefault", "Default")
+
+in_training <- createDataPartition(trial1$SeriousDlqin2yrs, p = .75, list = FALSE)
+training <- trial1[ in_training,]
+testing  <- trial1[-in_training,]
+
+# load in dataset
+head(cs_training)
+
+ctrl <- trainControl(method="cv", 
+                     number = 5,
+                     summaryFunction=twoClassSummary, 
+                     classProbs=TRUE,
+                     savePredictions = TRUE)
+
+rf_fit <- train(SeriousDlqin2yrs ~ ., 
+                data = training, 
+                method = "xgbLinear",
+                metric = "ROC",
+                trControl=ctrl)
+
+selectedIndices <- rf_fit$pred$mtry == 2
+
+plot.roc(rf_fit$pred$obs[selectedIndices],
+         rf_fit$pred$NonDefault[selectedIndices])
