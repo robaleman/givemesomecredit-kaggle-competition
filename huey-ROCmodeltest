@@ -1,0 +1,57 @@
+# load in packages
+library(caret)
+library(ranger)
+library(dplyr)
+library(e1071)
+library(ggplot2)
+library(mlbench)
+library(plotROC)
+library(pROC)
+
+trial1 <- sample_n(as.data.frame(data_imputed),5000)
+#trial1 <- sample_n(as.data.frame(na.omit(cs_training)),5000)
+
+trial1$SeriousDlqin2yrs <- factor(testing$SeriousDlqin2yrs)
+#levels(trial1$SeriousDlqin2yrs) <- c("NonDefault", "Default")
+
+in_training <- createDataPartition(trial1$SeriousDlqin2yrs, p = .75, list = FALSE)
+training <- trial1[ in_training,]
+testing  <- trial1[-in_training,]
+
+# load in dataset
+head(training)
+
+ctrl <- trainControl(method="cv", 
+                     number = 5,
+                     summaryFunction=twoClassSummary, 
+                     classProbs=TRUE,
+                     savePredictions = TRUE)
+
+rf_fit <- train(SeriousDlqin2yrs ~ ., 
+                data = training, 
+                method = "xgbLinear",
+                metric = "ROC",
+                trControl=ctrl)
+
+
+myRoc <- roc(predictor = rf_fit$pred$Default, response = rf_fit$pred$obs, positive = 'Default')
+plot(myRoc)
+
+plot(rf_fit)
+res <- rf_fit$results
+res
+
+# predict the outcome on a test set
+rf_pred <- predict(rf_fit, testing)
+# compare predicted outcome and true outcome
+confusionMatrix(rf_pred, testing$SeriousDlqin2yrs)
+
+result.predicted.prob <- predict(rf_fit, testing, type="prob") # Prediction
+
+result.roc <- roc(testing$SeriousDlqin2yrs, result.predicted.prob$Default) # Draw ROC curve.
+result.roc$auc
+
+plot(result.roc, print.thres="best", print.thres.best.method="closest.topleft")
+result.coords <- coords(result.roc, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
+print(result.coords)
+
